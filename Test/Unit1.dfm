@@ -11,7 +11,6 @@ object Form1: TForm1
   Font.Name = 'Tahoma'
   Font.Style = []
   Menu = MainMenu1
-  OldCreateOrder = False
   Position = poScreenCenter
   OnClose = FormClose
   OnCreate = FormCreate
@@ -45,7 +44,7 @@ object Form1: TForm1
     Height = 19
     Panels = <
       item
-        Width = 200
+        Width = 400
       end
       item
         Width = 50
@@ -167,6 +166,7 @@ object Form1: TForm1
       end
       object mniGeometryRotate: TMenuItem
         Caption = #26059#36716
+        ShortCut = 24699
         OnClick = mniGeometryRotateClick
       end
     end
@@ -183,7 +183,7 @@ object Form1: TForm1
     end
   end
   object dlgOpenPic: TOpenPictureDialog
-    Left = 40
-    Top = 24
+    Left = 144
+    Top = 96
   end
 end

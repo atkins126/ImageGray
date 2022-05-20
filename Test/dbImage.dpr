@@ -5,14 +5,11 @@ program dbImage;
 {$IFEND}
 
 uses
-{$IFDEF WIN32}
-  FastMove,
+  {$IFDEF WIN32}
   db.Image.jpegdec in '..\src\db.Image.jpegdec.pas',
-{$IFEND }
+  {$IFEND }
   Vcl.Forms,
-  Unit1 in 'Unit1.pas' {Form1} ,
-  db.Memory.Move in '..\src\db.Memory.Move.pas',
-  db.Memory.Call in '..\src\db.Memory.Call.pas',
+  Unit1 in 'Unit1.pas' {Form1},
   db.Image.Gray in '..\src\db.Image.Gray.pas',
   db.Image.Load in '..\src\db.Image.Load.pas',
   db.Image.Common in '..\src\db.Image.Common.pas',
@@ -22,7 +19,9 @@ uses
   db.Image.Saturation in '..\src\db.Image.Saturation.pas',
   db.Image.ColorMap in '..\src\db.Image.ColorMap.pas',
   db.Image.Effect in '..\src\db.Image.Effect.pas',
-  db.Image.GeometricTrans in '..\src\db.Image.GeometricTrans.pas';
+  db.Image.GeometricTrans in '..\src\db.Image.GeometricTrans.pas',
+  db.Image.Rotate in '..\src\db.Image.Rotate.pas',
+  db.Image.Blend in '..\src\db.Image.Blend.pas';
 
 {$R *.res}
 

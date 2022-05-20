@@ -63,6 +63,7 @@ type
     FbmpTrans        : TBitmap;
     FTrackColorChange: TTrackBar;
     FlblLightValue   : TLabel;
+    FintRotateAngle  : Integer;
     procedure BackupBmp;
     procedure LoadImageProc(const strFileName: string; img: TImage);
     procedure OnColorChange(Sender: TObject);
@@ -83,7 +84,7 @@ implementation
 {$R *.dfm}
 
 uses
-  db.Image.Load, db.Image.Gray, db.Image.Invert, db.Image.Light, db.Image.Contrast, db.Image.Saturation, db.Image.ColorMap, db.Image.Effect, db.Image.GeometricTrans;
+  db.Image.Load, db.Image.Gray, db.Image.Rotate, db.Image.Invert, db.Image.Light, db.Image.Contrast, db.Image.Saturation, db.Image.ColorMap, db.Image.Blend, db.Image.Effect, db.Image.GeometricTrans;
 
 procedure TForm1.LoadImageProc(const strFileName: string; img: TImage);
 begin
@@ -129,6 +130,7 @@ begin
   FbmpBackup.PixelFormat := pf32bit;
   FbmpTrans              := TBitmap.Create;
   FbmpTrans.PixelFormat  := pf32bit;
+  FintRotateAngle        := 0;
 
   mniSizeActual.Checked  := False;
   mniSizeStrecth.Checked := True;
@@ -162,6 +164,7 @@ begin
   if not FileExists(FstrBackFileName) then
     Exit;
 
+  FintRotateAngle := 0;
   LoadImageProc(FstrBackFileName, imgShow);
 end;
 
@@ -196,7 +199,7 @@ procedure TForm1.mniColorGrayClick(Sender: TObject);
 begin
   with TStopwatch.StartNew do
   begin
-    Gray(imgShow.Picture.Bitmap, gtSSEParallel);
+    Gray(imgShow.Picture.Bitmap);
     statTip.Panels[0].Text := Format('灰值化用时：%d 毫秒', [ElapsedMilliseconds]);
   end;
 
@@ -207,7 +210,7 @@ procedure TForm1.mniColorInvertClick(Sender: TObject);
 begin
   with TStopwatch.StartNew do
   begin
-    Invert(imgShow.Picture.Bitmap, itDelphi);
+    Invert(imgShow.Picture.Bitmap, itParallel_AVX);
     statTip.Panels[0].Text := Format('反色用时：%d 毫秒', [ElapsedMilliseconds]);
   end;
   imgShow.Invalidate;
@@ -232,15 +235,15 @@ begin
     with TStopwatch.StartNew do
     begin
       if ccChange = ccLight then
-        Light(bmpTemp, FTrackColorChange.Position, ltSSEParallel)                // 调节亮度
+        Light(bmpTemp, FTrackColorChange.Position, ltParallel_SSE)               // 调节亮度
       else if ccChange = ccContrast then                                         //
-        Contrast(bmpTemp, FTrackColorChange.Position, ctSSEParallel)             // 调节对比度
+        Contrast(bmpTemp, FTrackColorChange.Position, ctParallel)                // 调节对比度
       else if ccChange = ccSaturation then                                       //
-        Saturation(bmpTemp, FTrackColorChange.Position + 255, stSSEParallel)     // 调节饱和度
+        Saturation(bmpTemp, FTrackColorChange.Position + 255, stParallel)        // 调节饱和度
       else if ccChange = ccColorMode then                                        //
         ColorMap(bmpTemp, FTrackColorChange.Position, cmtParallel)               // 调节色彩
       else if ccChange = ccTranslate then                                        //
-        ColorTrans(bmpTemp, FbmpTrans, FTrackColorChange.Position, cttParallel); // 调节透明度
+        ColorBlend(bmpTemp, FbmpTrans, FTrackColorChange.Position, cbtParallel); // 调节透明度
 
       statTip.Panels[0].Text := Format(c_strShowTime[Integer(ccChange)], [ElapsedMilliseconds]);
     end;
@@ -329,31 +332,21 @@ begin
   end;
 end;
 
-var
-  I: Integer = 5;
-
 procedure TForm1.mniGeometryRotateClick(Sender: TObject);
 var
-  bmpTemp: TBitmap;
-  bmpDst : TBitmap;
+  bmpDst: TBitmap;
 begin
-  bmpTemp := TBitmap.Create;
-  bmpDst  := TBitmap.Create;
+  bmpDst := TBitmap.Create;
+  Inc(FintRotateAngle, 5);
   try
     with TStopwatch.StartNew do
     begin
-      bmpTemp.PixelFormat := pf32bit;
-      bmpTemp.Width       := FbmpBackup.Width;
-      bmpTemp.Height      := FbmpBackup.Height;
-      bmpTemp.Canvas.Draw(0, 0, FbmpBackup);
-      Rotate_Parallel(bmpTemp, bmpDst, I);
-      Inc(I, 5);
-      statTip.Panels[0].Text := Format('旋转用时：%d 毫秒', [ElapsedMilliseconds]);
+      Rotate(FbmpBackup, bmpDst, FintRotateAngle);
+      statTip.Panels[0].Text := Format('旋转角度：%0.3d，旋转用时：%d 毫秒', [FintRotateAngle, ElapsedMilliseconds]);
     end;
     imgShow.Picture.Bitmap.Assign(bmpDst);
     imgShow.Invalidate;
   finally
-    bmpTemp.free;
     bmpDst.free;
   end;
 end;

@@ -1,17 +1,17 @@
-# RGB2Gray MMX/SSE/SSE2/SSE4/AVX/AVX2/AVX512 optimization
+# Delphi digital image processing optimization MMX/SSE/SSE2/SSE4/AVX/AVX2/AVX512
 
 - [简体中文](readmeCN.md)
 
 ## Description：
-    Function：32bit Pixel RGB to Gray
-    DevTools：Delphi 10.3
+    This is my record of learning SIMD
+    Function: 32bit bitmap, gray、invert color、mirror、rotate、adjust brightness、saturation、contrast、transparency, etc.
+    DevTools：Delphi 11
     Platform：Win10X64；Support X86、X64
+    Test    ：4096*4096
+    
+### Remarks:
+		Because when creating a large bitmap in memory, vcl.graphics.pas is time-consuming, so it needs to be modified.
+		See: https://stackoverflow.com/questions/2500498/delphi-fast-large-bitmap-creation-without-clearing/21281835#21281835
 
-### Delphi implemented function：
-```
-type
-  TGrayType = (gtAPI, gtScanLine, gtDelphi, gtFourPoint, gtParallel, gtGDIPLUS, gtTable, gtASM, gtMMX, gtSSE, gtSSE2, gtSSE4, gtSSEParallel, gtAVX, gtAVX2, gtAVX512, gtGPU, gtOther);
-```
-## Best Optimization： 
-    gtSSEParallel
-  
+#### BLOG：
+    https://blog.csdn.net/dbyoung/category_10762408.html

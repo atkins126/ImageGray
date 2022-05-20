@@ -3,10 +3,7 @@ unit db.Image.Contrast;
   Func: 32位位图对比度
   Name: dbyoung@sina.com
   Date: 2021-2-22
-  Vers: Delphi 10.3.2
-  Test: 4096 * 4096 * 32
-  Note：Delphi 的 Release 模式是有优化的，Debug 是没有的；下面的时间，都是在 DEBUG 模式下的用时；
-  Note: 并行程序，不能在 IDE 下运行查看效果。必须脱离 IDE 执行查看效果。
+  Vers: Delphi 11
 }
 
 interface
@@ -14,7 +11,7 @@ interface
 uses Winapi.Windows, System.Threading, System.Math, Vcl.Graphics, db.Image.Common;
 
 type
-  TContrastType = (ctScanline, ctDelphi, ctParallel, ctSSEParallel, ctSSE2, ctSSE4, ctAVX1, ctAVX2, ctAVX512knl, ctAVX512skx);
+  TContrastType = (ctScanline, ctDelphi, ctTable, ctParallel, ctSSEParallel, ctSSE2, ctSSE4, ctAVX1, ctAVX2, ctAVX512knl, ctAVX512skx);
 
 procedure Contrast(bmp: TBitmap; const intContrastValue: Integer; const ct: TContrastType = ctParallel);
 
@@ -25,16 +22,18 @@ var
   X, Y  : Integer;
   pColor: PRGBQuad;
   kValue: Integer;
+  kCoeff: Single;
 begin
   kValue := IfThen(intContrastValue < 0, 255, 128);
+  kCoeff := intContrastValue / kValue;
   for Y  := 0 to bmp.Height - 1 do
   begin
     pColor := bmp.ScanLine[Y];
     for X  := 0 to bmp.Width - 1 do
     begin
-      pColor^.rgbRed   := EnsureRange(pColor^.rgbRed + Round(((pColor^.rgbRed - 128) * intContrastValue) / kValue), 0, 255);
-      pColor^.rgbGreen := EnsureRange(pColor^.rgbGreen + Round(((pColor^.rgbGreen - 128) * intContrastValue) / kValue), 0, 255);
-      pColor^.rgbBlue  := EnsureRange(pColor^.rgbBlue + Round(((pColor^.rgbBlue - 128) * intContrastValue) / kValue), 0, 255);
+      pColor^.rgbRed   := EnsureRange(pColor^.rgbRed   + Round(((pColor^.rgbRed   - 128) * kCoeff)), 0, 255);
+      pColor^.rgbGreen := EnsureRange(pColor^.rgbGreen + Round(((pColor^.rgbGreen - 128) * kCoeff)), 0, 255);
+      pColor^.rgbBlue  := EnsureRange(pColor^.rgbBlue  + Round(((pColor^.rgbBlue  - 128) * kCoeff)), 0, 255);
       Inc(pColor);
     end;
   end;
@@ -45,15 +44,33 @@ var
   I, Count: Integer;
   pColor  : PRGBQuad;
   kValue  : Integer;
+  kCoeff  : Single;
 begin
   Count  := bmp.Width * bmp.Height;
   pColor := GetBitsPointer(bmp);
   kValue := IfThen(intContrastValue < 0, 255, 128);
+  kCoeff := intContrastValue / kValue;
   for I  := 0 to Count - 1 do
   begin
-    pColor^.rgbRed   := EnsureRange(pColor^.rgbRed + Round(((pColor^.rgbRed - 128) * intContrastValue) / kValue), 0, 255);
-    pColor^.rgbGreen := EnsureRange(pColor^.rgbGreen + Round(((pColor^.rgbGreen - 128) * intContrastValue) / kValue), 0, 255);
-    pColor^.rgbBlue  := EnsureRange(pColor^.rgbBlue + Round(((pColor^.rgbBlue - 128) * intContrastValue) / kValue), 0, 255);
+    pColor^.rgbRed   := EnsureRange(pColor^.rgbRed   + Round(((pColor^.rgbRed   - 128) * kCoeff)), 0, 255);
+    pColor^.rgbGreen := EnsureRange(pColor^.rgbGreen + Round(((pColor^.rgbGreen - 128) * kCoeff)), 0, 255);
+    pColor^.rgbBlue  := EnsureRange(pColor^.rgbBlue  + Round(((pColor^.rgbBlue  - 128) * kCoeff)), 0, 255);
+    Inc(pColor);
+  end;
+end;
+
+procedure Contrast_Table(bmp: TBitmap; const intContrastValue: Integer);
+var
+  I, Count: Integer;
+  pColor  : PRGBQuad;
+begin
+  Count  := bmp.Width * bmp.Height;
+  pColor := GetBitsPointer(bmp);
+  for I  := 0 to Count - 1 do
+  begin
+    pColor^.rgbRed   := g_ContrastTable[intContrastValue, pColor^.rgbRed];
+    pColor^.rgbGreen := g_ContrastTable[intContrastValue, pColor^.rgbGreen];
+    pColor^.rgbBlue  := g_ContrastTable[intContrastValue, pColor^.rgbBlue];
     Inc(pColor);
   end;
 end;
@@ -71,21 +88,19 @@ begin
     var
       X: Integer;
       pColor: PRGBQuad;
-      kValue: Integer;
     begin
       pColor := PRGBQuad(StartScanLine + Y * bmpWidthBytes);
-      kValue := IfThen(intContrastValue < 0, 255, 128);
       for X := 0 to bmp.Width - 1 do
       begin
-        pColor^.rgbRed := EnsureRange(pColor^.rgbRed + Round(((pColor^.rgbRed - 128) * intContrastValue) / kValue), 0, 255);
-        pColor^.rgbGreen := EnsureRange(pColor^.rgbGreen + Round(((pColor^.rgbGreen - 128) * intContrastValue) / kValue), 0, 255);
-        pColor^.rgbBlue := EnsureRange(pColor^.rgbBlue + Round(((pColor^.rgbBlue - 128) * intContrastValue) / kValue), 0, 255);
+        pColor^.rgbRed   := g_ContrastTable[intContrastValue, pColor^.rgbRed];
+        pColor^.rgbGreen := g_ContrastTable[intContrastValue, pColor^.rgbGreen];
+        pColor^.rgbBlue  := g_ContrastTable[intContrastValue, pColor^.rgbBlue];
         Inc(pColor);
       end;
     end);
 end;
 
-procedure Contrast_SSEParallel_Proc(pColor: PRGBQuad; const intContrastValue, bmpWidth: Integer);
+procedure Contrast_SSEParallel_Proc(pColor: PByte; const intContrastValue, bmpWidth: Integer);
 asm
   MOVSS   XMM1, [c_ContSSEMask]             // XMM1 = |00000000|00000000|00000000|00000080
   MOVSS   XMM2, [c_ContSSEM257]             // XMM1 = |00000000|00000000|00000000|00000101
@@ -169,8 +184,8 @@ asm
   CVTTPS2DQ XMM7, XMM7                      // XMM7 = Round((pColor^.rgbBlue - 128) * intContrastValue / kValue)
   PADDUSB   XMM7, XMM4                      // XMM7 = pColor^.rgbBlue + Round((pColor^.rgbBlue - 128) * intContrastValue / kValue);
 
-@Result:
   // 返回结果
+@Result:
   PSLLD   XMM6,  8                          // XMM6  = |0000Y300|0000Y200|0000Y100|0000Y000|
   PSLLD   XMM7,  16                         // XMM7  = |00Y30000|00Y20000|00Y10000|00Y00000|
   ORPS    XMM5,  XMM6                       // XMM5  = |0000Y3Y3|0000Y2Y2|0000Y1Y1|0000Y0Y0|
@@ -193,9 +208,9 @@ begin
   TParallel.For(0, bmp.Height - 1,
     procedure(Y: Integer)
     var
-      pColor: PRGBQuad;
+      pColor: PByte;
     begin
-      pColor := PRGBQuad(StartScanLine + Y * bmpWidthBytes);
+      pColor := PByte(StartScanLine + Y * bmpWidthBytes);
       Contrast_SSEParallel_Proc(pColor, intContrastValue, bmp.Width);
     end);
 end;
@@ -210,12 +225,14 @@ begin
 
   case ct of
     ctScanline:
-      Contrast_ScanLine(bmp, intContrastValue); // 105 ms
-    ctDelphi:                                   //
-      Contrast_Delphi(bmp, intContrastValue);   // 100 ms
-    ctParallel:                                 //
-      Contrast_Parallel(bmp, intContrastValue); //
-    ctSSEParallel:
+      Contrast_ScanLine(bmp, intContrastValue);                                        // 105 ms
+    ctDelphi:                                                                          //
+      Contrast_Delphi(bmp, intContrastValue);                                          // 100 ms
+    ctTable:                                                                           //
+      Contrast_Table(bmp, intContrastValue);                                           // 50 ms
+    ctParallel:                                                                        //
+      Contrast_Parallel(bmp, intContrastValue);                                        // 06 ms
+    ctSSEParallel:                                                                     //
       Contrast_SSEParallel(bmp, intContrastValue);                                     //
     ctSSE2:                                                                            //
       bgraContrast_sse2(pColor, pContr, bmp.Width, bmp.Height, intContrastValue);      // 62 ms

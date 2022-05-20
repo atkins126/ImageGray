@@ -3,32 +3,19 @@ unit db.Image.Gray;
   Func: 32位位图灰值化
   Name: dbyoung@sina.com
   Date: 2020-10-01
-  Vers: Delphi 10.3.2
-  Test: 4096 * 4096 * 32
-  Note：Delphi 的 Release 模式是有优化的，Debug 是没有的；下面的时间，都是在 DEBUG 模式下的用时；
-  Note: 并行程序，不能在 IDE 下运行查看效果。必须脱离 IDE 执行查看效果。
+  Vers: Delphi 11
 
   基本原理：
   Gray = (R + G + B) / 3  = (R + G + B) * 85($55) / 255 = (R + G + B) * 85($55) >> 8
-  Gray = R*0.299 + G*0.587 + B*0.114
+  Gray = R * 0.299 + G * 0.587 + B * 0.114
   Gray = R,G,B 中最大值
 
   定点优化：
-  Gray = (R*77   + G*151  + B*28)   >> 8
-  Gray = (R*0x4D + G*0x97 + B*0x1C) >> 8
+  Gray = R * 0.299 + G * 0.587 + B * 0.114 = (R * 77   + G * 151  + B * 28)   >> 8
+  Gray = R * 0.299 + G * 0.587 + B * 0.114 = (R * 0x4D + G * 0x97 + B * 0x1C) >> 8
 
   查表优化：
   R、G、B，都在 0---255 之间，可以将 R(0---255)*77、G(0---255)*151、B(0---255)*28 预先计算好，存放在表中，优化掉乘法
-
-  寄存器宽度：
-  CPU  :
-  EAX/EBX/ECX/EDX/EDI/ESI           32BITS (x86)
-  RAX/RBX/RCX/RDX/RDI/RSI           64BITS (x64, EAX 寄存器是 RAX 寄存器的低 32 位)
-  MMX    :   MM0 --- MM7            64BITS
-  SSE2   :  XMM0--- XMM7           128BITS
-  SSE4   :  XMM0---XMM15           128BITS (SSE4 以上指令，Delphi 编译器不支持)
-  AVX    :  YMM0---YMM15           256BITS (XMM 寄存器是 YMM 寄存器的低 128 位)
-  AVX512 :  ZMM0---ZMM31           512BITS (YMM 寄存器是 ZMM 寄存器的低 256 位)
 }
 
 interface
@@ -36,7 +23,7 @@ interface
 uses Winapi.Windows, System.SysUtils, System.Threading, Vcl.Graphics, Winapi.GDIPOBJ, Winapi.GDIPAPI, db.Image.Common;
 
 type
-  TGrayType = (gtAPI, gtScanLine, gtDelphi, gtFourPoint, gtParallel, gtGDIPLUS, gtTable, gtASM, gtMMX, gtSSE, gtSSEParallel, gtSSE2, gtSSE4, gtAVX1, gtAVX2, gtAVX512knl, gtAVX512skx, gtGPU, gtOther);
+  TGrayType = (gtAPI, gtScanLine, gtDelphi, gtFourPoint, gtParallel, gtGDIPLUS, gtTable, gtASM, gtMMX, gtSSE, gtSSEParallel, gtGPU, gtOther);
 
 procedure Gray(bmp: TBitmap; const gt: TGrayType = gtSSEParallel);
 
@@ -69,15 +56,17 @@ end;
 { 119 ms }
 procedure Gray_ScanLine(bmp: TBitmap);
 var
-  I, J  : Integer;
-  pColor: PRGBQuad;
+  I, J   : Integer;
+  pColor : PRGBQuad;
+  byeGray: Byte;
 begin
   for I := 0 to bmp.Height - 1 do
   begin
     pColor := bmp.ScanLine[I];
     for J  := 0 to bmp.Width - 1 do
     begin
-      pColor^ := GetPixelGray(pColor^.rgbRed, pColor^.rgbGreen, pColor^.rgbBlue);
+      byeGray := Round(0.299 * pColor^.rgbRed + 0.587 * pColor^.rgbGreen + 0.114 * pColor^.rgbBlue);
+      pColor^ := TRGBQuad(RGB(byeGray, byeGray, byeGray));
       Inc(pColor);
     end;
   end;
@@ -88,12 +77,14 @@ procedure Gray_Delphi(bmp: TBitmap);
 var
   I, Count: Integer;
   pColor  : PRGBQuad;
+  byeGray : Byte;
 begin
   Count  := bmp.Width * bmp.Height;
   pColor := GetBitsPointer(bmp);
   for I  := 0 to Count - 1 do
   begin
-    pColor^ := GetPixelGray(pColor^.rgbRed, pColor^.rgbGreen, pColor^.rgbBlue);
+    byeGray := Round(0.299 * pColor^.rgbRed + 0.587 * pColor^.rgbGreen + 0.114 * pColor^.rgbBlue);
+    pColor^ := TRGBQuad(RGB(byeGray, byeGray, byeGray));
     Inc(pColor);
   end;
 end;
@@ -103,6 +94,7 @@ procedure Gray_FourPoint(bmp: TBitmap);
 var
   I, J, Count: Integer;
   pColor     : PRGBQuad;
+  byeGray    : Byte;
 begin
   Count  := bmp.Width * bmp.Height;
   pColor := GetBitsPointer(bmp);
@@ -110,13 +102,14 @@ begin
   begin
     for J := 0 to 3 do
     begin
-      pColor^ := GetPixelGray(pColor^.rgbRed, pColor^.rgbGreen, pColor^.rgbBlue);
+      byeGray := Round(0.299 * pColor^.rgbRed + 0.587 * pColor^.rgbGreen + 0.114 * pColor^.rgbBlue);
+      pColor^ := TRGBQuad(RGB(byeGray, byeGray, byeGray));
       Inc(pColor);
     end;
   end;
 end;
 
-{ 45 ms  需要脱离 IDE 执行 / ScanLine 不能用于 TParallel.For 中 }
+{ 45 ms  需要脱离 IDE 执行 }
 procedure Gray_Parallel(bmp: TBitmap);
 var
   StartScanLine: Integer;
@@ -130,11 +123,13 @@ begin
     var
       X: Integer;
       pColor: PRGBQuad;
+      byeGray: Byte;
     begin
       pColor := PRGBQuad(StartScanLine + Y * bmpWidthBytes);
       for X := 0 to bmp.Width - 1 do
       begin
-        pColor^ := GetPixelGray(pColor^.rgbRed, pColor^.rgbGreen, pColor^.rgbBlue);
+        byeGray := Round(0.299 * pColor^.rgbRed + 0.587 * pColor^.rgbGreen + 0.114 * pColor^.rgbBlue);
+        pColor^ := TRGBQuad(RGB(byeGray, byeGray, byeGray));
         Inc(pColor);
       end;
     end);
@@ -175,7 +170,7 @@ begin
   end;
 end;
 
-procedure Gray_ASM_Proc_x86(pColor: PRGBQuad; const Count: Integer); register;
+procedure Gray_ASM_Proc_x86(pColor: PByte; const Count: Integer); register;
 asm
   {$IFDEF WIN32}
   MOV    ECX, EDX                       // ECX = Count 循环计数 EDX (Count) 赋给 ECX；通常将 ECX 作为计数器来使用。只是约定俗成，不是标准
@@ -208,6 +203,7 @@ procedure Gray_MMX_Proc_P0(pColor: PByte; const Count: Integer); register;
 asm
   {$IFDEF WIN32}
   EMMS
+
   MOV        ECX,   EDX                          // ECX = Count 循环计数 EDX (Count) 赋给 ECX；
   PXOR       MM7,   MM7                          // MM7 = $0000000000000000
   MOVQ       MM6,   c_GrayMMXARGB                // MM6 = $0000004D0095001C
@@ -241,6 +237,7 @@ end;
 procedure Gray_MMX_Proc_P1(pColor: PByte; const Count: Integer); register;
 asm
   EMMS
+
   MOV        ECX,  EDX             // ECX = Count 循环计数 EDX (Count) 赋给 ECX；
   PXOR       MM7,  MM7             // MM7 = $0000000000000000
   MOVQ       MM6,  c_GrayMMXARGB   // MM6 = $0000004D0095001C
@@ -282,7 +279,7 @@ procedure Gray_MMX_Proc_P2(pColor: PByte; Count: Integer); register;
 asm
   {$IFDEF WIN32}
   EMMS
-  SUB        EDX,  16                             // Count 需要能被 24 整除 4096*4096*4 mod 24 = 16
+  SUB        EDX,  16                             // Count 需要能被 24 整除 4096*4096*4 mod 24 = 0
   MOV        ECX,  EDX                            // ECX = Count 循环计数 EDX (Count) 赋给 ECX；
   PXOR       MM7,  MM7                            // MM7 = $0000000000000000
   MOVQ       MM6,  c_GrayMMXARGB                  // MM6 = $0000004D0095001C
@@ -356,7 +353,7 @@ asm
   MOV        EBX,   [EBX*4 + c_GrayValue]         // EBX = TRGBQuad(c_GrayValue[byeGray])
   MOV        [EAX+4*5], EBX                       // [EAX+4*5] = TRGBQuad(c_GrayValue[byeGray])
 
-  ADD        EAX,   24                            // EAX   = 指向下6个像素
+  ADD        EAX,   24                            // EAX   = 指向下 6个像素
   SUB        ECX,   24                            // Count 减 24
   JNZ        @LOOP                                // 循环
   EMMS
@@ -446,7 +443,7 @@ end;
   GRAY = (R+G+B) div 3 = (R+G+B) * 85 / 255 = (R+G+B) * $55 >> 8
 }
 
-procedure Gray_SSE_Proc_01(pColor: PRGBQuad; const Count: Integer); register;
+procedure Gray_SSE_Proc_01(pColor: PByte; const Count: Integer); register;
 asm
   {$IFDEF WIN64}
   MOV     RAX,  RCX
@@ -502,11 +499,12 @@ begin
   Gray_SSE_Proc_01(GetBitsPointer(bmp), bmp.Width * bmp.Height * 4);
 end;
 
-procedure Gray_SSEParallel_Proc(pColor: PRGBQuad; const bmpWidth: Integer);
+procedure Gray_SSEParallel_Proc(pColor: PByte; const bmpWidth: Integer);
 asm
   {$IFDEF WIN64}
   MOV     RAX,  RCX
   {$IFEND}
+
   MOV     ECX,  EDX
   MOVSS   XMM1, [c_PixBGRAMask]             // XMM1 = 000000000000000000000000000000FF
   MOVSS   XMM2, [c_GraySSERioB]             // XMM2 = 0000000000000000000000000000001C
@@ -556,7 +554,7 @@ asm
   JNZ     @LOOP                             // 循环
 end;
 
-{ 4 ms  需要脱离 IDE 执行 / ScanLine 不能用于 TParallel.For 中 }
+{ 4 ms  需要脱离 IDE 执行 }
 procedure Gray_SSEParallel(bmp: TBitmap);
 var
   StartScanLine: Integer;
@@ -568,9 +566,9 @@ begin
   TParallel.For(0, bmp.Height - 1,
     procedure(Y: Integer)
     var
-      pColor: PRGBQuad;
+      pColor: PByte;
     begin
-      pColor := PRGBQuad(StartScanLine + Y * bmpWidthBytes);
+      pColor := PByte(StartScanLine + Y * bmpWidthBytes);
       Gray_SSEParallel_Proc(pColor, bmp.Width);
     end);
 end;
@@ -650,13 +648,7 @@ begin
 end;
 
 procedure Gray(bmp: TBitmap; const gt: TGrayType = gtSSEParallel);
-var
-  pColor: PByte;
-  pGray : PDWORD;
 begin
-  pColor := GetBitsPointer(bmp);
-  pGray  := GetBitsPointer(bmp);
-
   case gt of
     gtAPI:
       Gray_API(bmp);
@@ -680,18 +672,6 @@ begin
       Gray_SSE(bmp);
     gtSSEParallel:
       Gray_SSEParallel(bmp);
-    gtSSE2:
-      bgraGray_sse2(pColor, pGray, bmp.Width, bmp.Height);
-    gtSSE4:
-      bgraGray_sse4(pColor, pGray, bmp.Width, bmp.Height);
-    gtAVX1:
-      bgraGray_avx1(pColor, pGray, bmp.Width, bmp.Height);
-    gtAVX2:
-      bgraGray_avx2(pColor, pGray, bmp.Width, bmp.Height);
-    gtAVX512knl:
-      bgraGray_avx512knl(pColor, pGray, bmp.Width, bmp.Height);
-    gtAVX512skx:
-      bgraGray_avx512skx(pColor, pGray, bmp.Width, bmp.Height);
     gtGPU:
       Gray_GPU(bmp);
     gtOther:

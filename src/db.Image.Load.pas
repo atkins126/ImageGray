@@ -3,8 +3,7 @@ unit db.Image.Load;
   Func: 图像加载，统一解码为32位位图格式
   Name: dbyoung@sina.com
   Date: 2020-10-01
-  Ver : Delphi 10.3.2
-  Test: 4096 * 4096 * 32
+  Ver : Delphi 11
   Note: GDI+ JPEG 解码效果最好
 }
 

@@ -1,16 +1,17 @@
-# RGB2Gray MMX/SSE/SSE2/SSE4/AVX/AVX2/AVX512 优化
+# Delphi 数字图像处理优化 MMX/SSE/SSE2/SSE4/AVX/AVX2/AVX512
 
 - [English](readme.md)
 
 ## 说明：
-    功能：32bit Pixel RGB to Gray
-    开发：Delphi 10.3
+    这是我学习 SIMD 的过程记录
+    功能：32bit 位图，灰度化、反色、镜像、旋转、调节亮度、饱和度、对比度、透明，等等。
+    开发：Delphi 11
     平台：Win10X64；支持 X86/X64
+    测试：4096*4096
 
-### Delphi 下实现的函数：
-```
-type
-  TGrayType = (gtAPI, gtScanLine, gtDelphi, gtFourPoint, gtParallel, gtGDIPLUS, gtTable, gtASM, gtMMX, gtSSE, gtSSE2, gtSSE4, gtSSEParallel, gtAVX1, gtAVX2, gtAVX512knl, gtAVX512skx, gtGPU, gtOther);
-```
-## 最优的方案： 
-    gtSSEParallel
+### 备注：
+	由于在内存中创建大的位图时，vcl.graphics.pas，会很耗时，所以要作修改。
+	详见：https://stackoverflow.com/questions/2500498/delphi-fast-large-bitmap-creation-without-clearing/21281835#21281835
+
+#### 博客：
+    https://blog.csdn.net/dbyoung/category_10762408.html

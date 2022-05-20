@@ -3,10 +3,7 @@ unit db.Image.Saturation;
   Func: 32位位图饱和度
   Name: dbyoung@sina.com
   Date: 2021-2-23
-  Vers: Delphi 10.3.2
-  Test: 4096 * 4096 * 32
-  Note：Delphi 的 Release 模式是有优化的，Debug 是没有的；下面的时间，都是在 DEBUG 模式下的用时；
-  Note: 并行程序，不能在 IDE 下运行查看效果。必须脱离 IDE 执行查看效果。
+  Vers: Delphi 11
 }
 
 interface
@@ -14,35 +11,11 @@ interface
 uses Winapi.Windows, System.Threading, System.Math, Vcl.Graphics, db.Image.Common;
 
 type
-  TSaturationType = (stScanline, stDelphi, stParallel, stSSEParallel, stSSE2, stSSE4, stAVX1, stAVX2, stAVX512knl, stAVX512skx);
+  TSaturationType = (stScanline, stDelphi, stTable, stParallel, stSSEParallel, stSSE2, stSSE4, stAVX1, stAVX2, stAVX512knl, stAVX512skx);
 
 procedure Saturation(bmp: TBitmap; const intSaturationValue: Integer; const st: TSaturationType = stAVX1);
 
 implementation
-
-procedure GetGrayAlpha(const intSaturationValue: Integer; var alpha: TAlpha; var grays: TGrays);
-var
-  X   : Integer;
-  I   : Integer;
-  Gray: Integer;
-begin
-  for I := 0 to 255 do
-  begin
-    alpha[I] := (I * intSaturationValue) shr 8;
-  end;
-
-  X     := 0;
-  for I := 0 to 255 do
-  begin
-    Gray     := I - alpha[I];
-    grays[X] := Gray;
-    Inc(X);
-    grays[X] := Gray;
-    Inc(X);
-    grays[X] := Gray;
-    Inc(X);
-  end;
-end;
 
 procedure Saturation_Scanline(bmp: TBitmap; const alpha: TAlpha; const grays: TGrays);
 var
@@ -81,7 +54,22 @@ begin
   end;
 end;
 
-procedure Saturation_Parallel(bmp: TBitmap; const alpha: TAlpha; const grays: TGrays);
+procedure Saturation_Table(bmp: TBitmap; const intSaturationValue: Integer);
+var
+  X     : Integer;
+  pColor: PRGBQuad;
+begin
+  pColor := GetBitsPointer(bmp);
+  for X  := 0 to bmp.width * bmp.height - 1 do
+  begin
+    pColor^.rgbRed   := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbRed];
+    pColor^.rgbGreen := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbGreen];
+    pColor^.rgbBlue  := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbBlue];
+    Inc(pColor);
+  end;
+end;
+
+procedure Saturation_Parallel(bmp: TBitmap; const intSaturationValue: Integer);
 var
   StartScanLine: Integer;
   bmpWidthBytes: Integer;
@@ -93,16 +81,14 @@ begin
     procedure(Y: Integer)
     var
       X: Integer;
-      Gray: Integer;
       pColor: PRGBQuad;
     begin
       pColor := PRGBQuad(StartScanLine + Y * bmpWidthBytes);
       for X := 0 to bmp.width - 1 do
       begin
-        Gray := grays[pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue];
-        pColor^.rgbRed := EnsureRange(Gray + alpha[pColor^.rgbRed], 0, 255);
-        pColor^.rgbGreen := EnsureRange(Gray + alpha[pColor^.rgbGreen], 0, 255);
-        pColor^.rgbBlue := EnsureRange(Gray + alpha[pColor^.rgbBlue], 0, 255);
+        pColor^.rgbRed   := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbRed];
+        pColor^.rgbGreen := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbGreen];
+        pColor^.rgbBlue  := g_SaturationTable[intSaturationValue, pColor^.rgbRed + pColor^.rgbGreen + pColor^.rgbBlue, pColor^.rgbBlue];
         Inc(pColor);
       end;
     end);
@@ -136,6 +122,8 @@ asm
   // 计算饱和值                             // Gray = I - alpha[I] = I - (I * intSaturationValue) shr 8
   CMP     EDX,  255
   JGE     @Large
+
+@Small:
   MOVAPS  XMM3, XMM5                        // XMM3  = XMM5
   PADDD   XMM5, XMM6                        // XMM5  = G+B
   PADDD   XMM5, XMM7                        // XMM5  = G+B+R
@@ -239,8 +227,10 @@ begin
       Saturation_Scanline(bmp, alpha, grays);
     stDelphi:
       Saturation_Delphi(bmp, alpha, grays);
+    stTable:
+      Saturation_Table(bmp, intSaturationValue);
     stParallel:
-      Saturation_Parallel(bmp, alpha, grays);
+      Saturation_Parallel(bmp, intSaturationValue);
     stSSEParallel:
       Saturation_SSEParallel(bmp, intSaturationValue);
     stSSE2:

@@ -3,3 +3,5 @@
 *.exe
 *.dcu
 *.rsm
+/src/Vcl.Graphics.pas
+/TR/Vcl.Graphics.pas
